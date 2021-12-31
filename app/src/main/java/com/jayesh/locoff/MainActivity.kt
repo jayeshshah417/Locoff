@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity(), GetDataCallback, DataRecyclerAdapter.O
 
     private lateinit var contextMainActivity:MainActivity
     private lateinit var dataViewModel: DataViewModel
-    var dataLists: MutableList<DataModel> = ArrayList()
+    private var dataLists: MutableList<DataModel> = ArrayList()
     private lateinit var nsv:NestedScrollView
     private lateinit var rv_data:RecyclerView
     private lateinit var dataRecyclerAdapter:DataRecyclerAdapter
@@ -36,12 +36,21 @@ class MainActivity : AppCompatActivity(), GetDataCallback, DataRecyclerAdapter.O
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
+        page = 1
         setViews()
         contextMainActivity = this
 
+    }
+
+    override fun onStart() {
+        super.onStart()
+        dataViewModel = ViewModelProvider(this).get(DataViewModel::class.java)
         dataViewModel.getData(page,this).observe(this,Observer{
             dataResultModel = it
+            if(it.page==1){
+                dataLists = ArrayList<DataModel>()
+            }
+            page = it.page!!+1
             dataLists.addAll(it.data!!)
             ll_progress.visibility=View.GONE
             dataRecyclerAdapter.setData(dataLists)
@@ -49,11 +58,7 @@ class MainActivity : AppCompatActivity(), GetDataCallback, DataRecyclerAdapter.O
         })
         nsv.setOnScrollChangeListener(NestedScrollView.OnScrollChangeListener { v, scrollX, scrollY, oldScrollX, oldScrollY ->
             if (scrollY == v.getChildAt(0).measuredHeight - v.measuredHeight) {
-                page++
-                ll_progress.visibility=View.VISIBLE
-                if(dataResultModel==null || (dataResultModel!=null && dataResultModel.total_pages!! >=page)) {
-                    dataViewModel.getData(page, this)
-                }
+                fetchData(page,null)
             }
         })
 
@@ -63,22 +68,16 @@ class MainActivity : AppCompatActivity(), GetDataCallback, DataRecyclerAdapter.O
                 if (!recyclerView.canScrollVertically(1)) {
                     if(!checkIfDataLessThanScreenSize){
                         checkIfDataLessThanScreenSize=true
-                        page++
-                        if(dataResultModel==null || (dataResultModel!=null && dataResultModel.total_pages!! >page)) {
-                            dataViewModel.getData(page, contextMainActivity)
-                            ll_progress.visibility = View.VISIBLE
-                            rv_data.removeOnScrollListener(this)
-                        }
+                        fetchData(page,this)
                     }
-                    Toast.makeText(applicationContext, "Last", Toast.LENGTH_LONG).show()
+
                 }
             }
         })
-
     }
 
     private fun setViews() {
-        dataViewModel = ViewModelProvider(this).get(DataViewModel::class.java)
+
         dataRecyclerAdapter = DataRecyclerAdapter(ArrayList<DataModel>(),this,this)
         nsv = findViewById(R.id.nsv)
         rv_data = findViewById(R.id.rv_data)
@@ -92,6 +91,7 @@ class MainActivity : AppCompatActivity(), GetDataCallback, DataRecyclerAdapter.O
         rv_data.setLayoutManager(layoutManager)
         rv_data.setAdapter(dataRecyclerAdapter)
         rv_data.setItemAnimator(DefaultItemAnimator())
+        dataRecyclerAdapter.notifyDataSetChanged()
     }
 
     override fun onSuccess(response: ResultModel?) {
@@ -100,14 +100,26 @@ class MainActivity : AppCompatActivity(), GetDataCallback, DataRecyclerAdapter.O
 
     override fun onError(error: String?) {
         Toast.makeText(this,error,Toast.LENGTH_LONG).show()
+        ll_progress.visibility=View.GONE
     }
 
     override fun onClickUser(dataModel: DataModel) {
         Toast.makeText(this,dataModel.first_name+" "+dataModel.last_name,Toast.LENGTH_SHORT).show()
     }
 
-    override fun onResume() {
-        page=1
-        super.onResume()
+
+
+
+
+    fun fetchData(page :Int,rv_scroll_listner:RecyclerView.OnScrollListener?){
+        if(dataResultModel==null || (dataResultModel!=null && dataResultModel.total_pages!! >=page)) {
+            ll_progress.visibility=View.VISIBLE
+            dataViewModel.getData(page, this)
+            if(rv_scroll_listner!=null){
+                rv_data.removeOnScrollListener(rv_scroll_listner)
+            }
+        }else{
+            Toast.makeText(applicationContext, "You Reached to Bottom Of Last Page", Toast.LENGTH_LONG).show()
+        }
     }
 }
